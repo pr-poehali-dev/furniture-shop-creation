@@ -2,9 +2,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Icon from "@/components/ui/icon";
+import { useState, useEffect } from 'react';
+import ProductModal from '@/components/ProductModal';
+import Cart from '@/components/Cart';
+import CatalogFilters from '@/components/CatalogFilters';
+
+interface Product {
+  id: number;
+  name: string;
+  price: string;
+  originalPrice: string;
+  image: string;
+  category: string;
+  rating: number;
+  reviews: number;
+}
+
+interface CartItem {
+  id: number;
+  name: string;
+  price: string;
+  image: string;
+  quantity: number;
+}
 
 export default function Index() {
-  const furnitureItems = [
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<Product[]>([]);
+
+  const furnitureItems: Product[] = [
     {
       id: 1,
       name: "Комфортный диван",
@@ -36,6 +65,94 @@ export default function Index() {
       reviews: 156
     }
   ];
+
+  useEffect(() => {
+    setFilteredItems(furnitureItems);
+  }, []);
+
+  const handleProductView = (product: Product) => {
+    setSelectedProduct(product);
+    setIsModalOpen(true);
+  };
+
+  const handleAddToCart = (product: Product) => {
+    const existingItem = cartItems.find(item => item.id === product.id);
+    if (existingItem) {
+      setCartItems(items => 
+        items.map(item => 
+          item.id === product.id 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      const newItem: CartItem = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        quantity: 1
+      };
+      setCartItems(items => [...items, newItem]);
+    }
+  };
+
+  const handleUpdateQuantity = (id: number, quantity: number) => {
+    setCartItems(items => 
+      items.map(item => 
+        item.id === id ? { ...item, quantity } : item
+      )
+    );
+  };
+
+  const handleRemoveItem = (id: number) => {
+    setCartItems(items => items.filter(item => item.id !== id));
+  };
+
+  const handleFiltersChange = (filters: any) => {
+    let filtered = [...furnitureItems];
+    
+    if (filters.categories.length > 0) {
+      const categoryMap: { [key: string]: string } = {
+        sofas: 'Мягкая мебель',
+        tables: 'Столы',
+        wardrobes: 'Шкафы'
+      };
+      filtered = filtered.filter(item => 
+        filters.categories.some((cat: string) => categoryMap[cat] === item.category)
+      );
+    }
+    
+    if (filters.rating > 0) {
+      filtered = filtered.filter(item => item.rating >= filters.rating);
+    }
+    
+    const [minPrice, maxPrice] = filters.priceRange;
+    filtered = filtered.filter(item => {
+      const price = parseInt(item.price.replace(/[^\d]/g, ''));
+      return price >= minPrice && price <= maxPrice;
+    });
+    
+    if (filters.sortBy === 'price-low') {
+      filtered.sort((a, b) => {
+        const priceA = parseInt(a.price.replace(/[^\d]/g, ''));
+        const priceB = parseInt(b.price.replace(/[^\d]/g, ''));
+        return priceA - priceB;
+      });
+    } else if (filters.sortBy === 'price-high') {
+      filtered.sort((a, b) => {
+        const priceA = parseInt(a.price.replace(/[^\d]/g, ''));
+        const priceB = parseInt(b.price.replace(/[^\d]/g, ''));
+        return priceB - priceA;
+      });
+    } else if (filters.sortBy === 'rating') {
+      filtered.sort((a, b) => b.rating - a.rating);
+    }
+    
+    setFilteredItems(filtered);
+  };
+
+  const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const features = [
     {
@@ -101,9 +218,18 @@ export default function Index() {
               <Button variant="outline" size="sm">
                 <Icon name="Search" size={16} />
               </Button>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsCartOpen(true)}
+                className="relative"
+              >
                 <Icon name="ShoppingCart" size={16} />
-                <span className="ml-1">3</span>
+                {cartItemsCount > 0 && (
+                  <span className="ml-1 bg-primary text-white rounded-full px-2 py-1 text-xs">
+                    {cartItemsCount}
+                  </span>
+                )}
               </Button>
               <Button className="hidden md:inline-flex">Консультация</Button>
             </div>
@@ -186,8 +312,13 @@ export default function Index() {
             </p>
           </div>
           
+          <CatalogFilters 
+            onFiltersChange={handleFiltersChange}
+            totalProducts={filteredItems.length}
+          />
+          
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {furnitureItems.map((item, index) => (
+            {filteredItems.map((item, index) => (
               <Card key={item.id} className="group hover:shadow-xl transition-all duration-300 hover:scale-105 bg-white">
                 <div className="relative overflow-hidden rounded-t-lg">
                   <img 
@@ -202,12 +333,20 @@ export default function Index() {
                     <Button size="sm" variant="secondary" className="w-10 h-10 p-0 rounded-full bg-white/90 hover:bg-white">
                       <Icon name="Heart" size={16} />
                     </Button>
-                    <Button size="sm" variant="secondary" className="w-10 h-10 p-0 rounded-full bg-white/90 hover:bg-white">
+                    <Button 
+                      size="sm" 
+                      variant="secondary" 
+                      className="w-10 h-10 p-0 rounded-full bg-white/90 hover:bg-white"
+                      onClick={() => handleProductView(item)}
+                    >
                       <Icon name="Eye" size={16} />
                     </Button>
                   </div>
                   <div className="absolute bottom-4 left-4 right-4">
-                    <Button className="w-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <Button 
+                      className="w-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      onClick={() => handleProductView(item)}
+                    >
                       <Icon name="Rotate3D" size={16} className="mr-2" />
                       3D-просмотр
                     </Button>
@@ -227,7 +366,10 @@ export default function Index() {
                     <span className="text-2xl font-bold text-primary">{item.price}</span>
                     <span className="text-sm text-muted-foreground line-through">{item.originalPrice}</span>
                   </div>
-                  <Button className="w-full">
+                  <Button 
+                    className="w-full"
+                    onClick={() => handleAddToCart(item)}
+                  >
                     <Icon name="ShoppingCart" size={16} className="mr-2" />
                     В корзину
                   </Button>
@@ -500,6 +642,22 @@ export default function Index() {
           </div>
         </div>
       </footer>
+
+      {/* Modals */}
+      <ProductModal 
+        product={selectedProduct}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onAddToCart={handleAddToCart}
+      />
+      
+      <Cart 
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        items={cartItems}
+        onUpdateQuantity={handleUpdateQuantity}
+        onRemoveItem={handleRemoveItem}
+      />
     </div>
   );
 }
